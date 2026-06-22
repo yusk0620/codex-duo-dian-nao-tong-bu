@@ -17,4 +17,6 @@ else
     echo "✅ DeepSeek Key 已存在"
 fi
 
+echo ""
 echo "🎉 完成! 用法: python3 run_analysis.py 000725"
+echo "🔄 他电脑更新后同步: bash sync.sh"
