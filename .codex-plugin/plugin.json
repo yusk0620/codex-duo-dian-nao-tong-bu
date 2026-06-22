@@ -1,0 +1,8 @@
+{
+  "name": "stock-super-analysis",
+  "description": "一键股票五维分析 + DeepSeek 总结建议",
+  "version": "1.0.0",
+  "author": { "name": "Codex" },
+  "skills": "./",
+  "commands": "./commands/"
+}
