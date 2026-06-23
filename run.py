@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """🔬 一键股票五维分析 + DeepSeek 总结"""
 
-import sys, json, os, urllib.request, datetime, ssl
+import sys, json, os, urllib.request, ssl
 import numpy as np, pandas as pd
 
 DS_KEY = os.path.expanduser('~/.deepseek_key')
@@ -157,7 +157,6 @@ def serenity_chain(stock_info_list):
         return result
     except Exception as e:
         return {s['code']: f'⚠️ 失败: {e}' for s in stock_info_list}
-
 
 
 # ─── 3. DeepSeek 总结 ───
