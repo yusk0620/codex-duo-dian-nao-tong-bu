@@ -131,6 +131,21 @@ def get_history(codes):
             df['ma5'] = df['close'].rolling(5).mean()
             df['ma20'] = df['close'].rolling(20).mean()
             df['chg_pct'] = df['close'].pct_change() * 100
+            # RSI(14)
+            delta = df['close'].diff()
+            gain = delta.where(delta > 0, 0.0)
+            loss = (-delta).where(delta < 0, 0.0)
+            avg_gain = gain.rolling(14).mean()
+            avg_loss = loss.rolling(14).mean()
+            rs = avg_gain / avg_loss.replace(0, 1e-9)
+            df['rsi'] = 100 - (100 / (1 + rs))
+            # Bollinger (20,2)
+            df['bb_mid'] = df['ma20']
+            df['bb_std'] = df['close'].rolling(20).std()
+            df['bb_upper'] = df['bb_mid'] + 2 * df['bb_std']
+            df['bb_lower'] = df['bb_mid'] - 2 * df['bb_std']
+            # Volume ratio
+            df['vol_ratio'] = df['volume'] / df['volume'].rolling(20).mean().replace(0, 1)
             last = df.iloc[-1]
             prev20 = df.tail(20)
             result[c] = {
@@ -151,6 +166,10 @@ def get_history(codes):
                 '20d_chg':  float((df.iloc[-1]['close'] - df.iloc[-21]['close'])
                                   / df.iloc[-21]['close'] * 100) if len(df) > 20 else None,
                 '20d_vol':  float(prev20['chg_pct'].std()),
+                'rsi':      float(last['rsi']) if not np.isnan(last['rsi']) else None,
+                'bb_upper': float(last['bb_upper']) if not np.isnan(last['bb_upper']) else None,
+                'bb_lower': float(last['bb_lower']) if not np.isnan(last['bb_lower']) else None,
+                'vol_ratio': float(last['vol_ratio']) if not np.isnan(last['vol_ratio']) else None,
             }
         else:
             result[c] = None
@@ -177,9 +196,11 @@ def analyze(rt_row, hist, source):
     if above_ma20: ts += 2
     if hist.get('20d_chg') and hist['20d_chg'] > 5: ts += 1
     if chg and chg > 1: ts += 1
-    uzi = (f"UZI·趋势{ts}/7 | "
+    if rsi and rsi > 50: ts += 1
+    uzi = (f"UZI·趋势{ts}/8 | "
            f"MA5:{'✅上' if above_ma5 else '❌下'} "
            f"MA20:{'✅上' if above_ma20 else '❌下'} | "
+           f"RSI:{rsi:.0f} | "
            f"20日:{hist.get('20d_chg', 0):+.1f}%")
 
     # TradingAgents · 信号
@@ -211,11 +232,27 @@ def analyze(rt_row, hist, source):
 
     # QuantDinger · 量化
     qs = 50
-    if above_ma5:      qs += 10
-    if pe and pe < 15:  qs += 10
+    if above_ma5:      qs += 8
+    if pe and pe < 15:  qs += 8
     if chg and chg > 0:  qs += 5
+    rsi = hist.get('rsi')
+    if rsi and rsi < 30:   qs += 5
+    elif rsi and rsi > 70: qs -= 3
+    bb_upper = hist.get('bb_upper')
+    bb_lower = hist.get('bb_lower')
+    if bb_lower and c < bb_lower: qs += 5
+    elif bb_upper and c > bb_upper: qs -= 3
+    vr = hist.get('vol_ratio')
+    if vr and vr > 1.2 and chg and chg > 0: qs += 4
+    elif vr and vr > 1.2: qs -= 2
+    rsi_str = f"RSI:{rsi:.0f}" if rsi else "RSI:?"
+    vr_str = f"量比:{vr:.1f}" if vr else "量比:?"
+    bb_str = "布林:轨内"
+    if bb_lower and c < bb_lower: bb_str = "布林:下轨↓"
+    elif bb_upper and c > bb_upper: bb_str = "布林:上轨↑"
     qd = (f"QuantDinger·{min(qs, 95)}/100 | "
           f"{'金叉✅' if above_ma5 else '死叉⚠️'} | "
+          f"{rsi_str} | {vr_str} | {bb_str} | "
           f"波{hist.get('20d_vol', 0):.1f}%")
 
     return uzi, ta, serenity, buffett, qd
