@@ -220,6 +220,61 @@ def analyze(rt_row, hist, source):
 
     return uzi, ta, serenity, buffett, qd
 
+# ═══════════════════════════════════════════════════════════════
+# 3.5 Serenity · 供应链卡点分析 (DeepSeek)
+# ═══════════════════════════════════════════════════════════════
+
+def serenity_chain(stock_info_list):
+    """用 DeepSeek API 做产业链/供应链卡点分析"""
+    api_key = open(DS_KEY).read().strip() if os.path.exists(DS_KEY) else ''
+    if not api_key:
+        return {s['code']: '⚠️ Key未设置' for s in stock_info_list}
+
+    stocks_desc = []
+    for s in stock_info_list:
+        desc = (f"- {s['code']} {s.get('name','')} "
+                f"(现价{s['price']}, PE{s.get('pe','?')}, PB{s.get('pb','?')})")
+        stocks_desc.append(desc)
+
+    NL = "\n"
+    prompt = f"""你是A股产业链分析专家。按Serenity供应链卡点方法论分析以下股票，每条80字以内。
+
+{NL.join(stocks_desc)}
+
+对每只股票分析：1)产业链位置(上游/中游/下游/平台) 2)关键上游依赖 3)下游集中度风险 4)卡点环节(技术壁垒/政策门槛/产能瓶颈) 5)一句话总结是否为强卡点。
+
+输出格式(每只一行):
+[代码] 位置:xxx | 上游:xxx | 下游:xxx | 卡点:xxx | 总结:xxx"""
+
+    try:
+        req = urllib.request.Request(
+            "https://api.deepseek.com/v1/chat/completions",
+            data=json.dumps({
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 600, "temperature": 0.4,
+            }).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            })
+        resp = json.loads(urllib.request.urlopen(req, timeout=20, context=_SSL).read())
+        text = resp['choices'][0]['message']['content']
+        result = {}
+        for line in text.strip().split("\n"):
+            for s in stock_info_list:
+                if line.strip().startswith(f"[{s['code']}]"):
+                    result[s['code']] = line.strip()
+                    break
+        for s in stock_info_list:
+            if s['code'] not in result:
+                result[s['code']] = '⚠️ 未匹配'
+        return result
+    except Exception as e:
+        return {s['code']: f'⚠️ 失败: {e}' for s in stock_info_list}
+
+
+
 
 # ═══════════════════════════════════════════════════════════════
 # 4. DeepSeek 总结 + 建议买入价
@@ -278,9 +333,10 @@ if __name__ == '__main__':
     print("📊 [2/4] 拉取历史K线 (baostock)...")
     hist = get_history(codes)
 
-    # [3/4] 五维分析
+    # [3/4] 五维分析 (Serenity 将在 3.5 步由 DeepSeek 补齐)
     print("🧠 [3/4] 五维引擎分析中...\n")
     full_report = {}
+    stock_list = []
 
     for code in codes:
         r = rt.get(code, {})
@@ -297,6 +353,9 @@ if __name__ == '__main__':
         pe = h.get('peTTM')
         pb = h.get('pbMRQ')
         name = r.get('name', '') if use_rt else ''
+
+        stock_list.append(
+            {'code': code, 'name': name, 'price': c, 'pe': pe, 'pb': pb})
 
         print(f"{'─'*70}")
         print(f"📊 {code} {name} | {src} {c:.2f} | {chg:+.2f}% | "
@@ -319,6 +378,14 @@ if __name__ == '__main__':
             'name': name, 'price': c, 'chg_pct': chg,
             'pe': pe, 'pb': pb, 'source': src,
         }
+        print()
+
+    # [3.5/4] Serenity 供应链分析
+    print("🔗 [3.5/4] Serenity 供应链卡点分析 (DeepSeek)...\n")
+    chain_data = serenity_chain(stock_list)
+    for code in codes:
+        chain_text = chain_data.get(code, '⚠️ 无供应链数据')
+        print(f"🔗 {code}: {chain_text}")
         print()
 
     # [4/4] DeepSeek
