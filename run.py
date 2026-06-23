@@ -4,11 +4,6 @@
 import sys, json, os, urllib.request, datetime, ssl
 import numpy as np, pandas as pd
 
-# ─── SSL 上下文 ───
-_SSL = ssl.create_default_context()
-_SSL.check_hostname = False
-_SSL.verify_mode = ssl.CERT_NONE
-
 DS_KEY = os.path.expanduser('~/.deepseek_key')
 
 # ─── 1. 数据获取 ───
